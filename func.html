@@ -3,76 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>StudyPath Forge Premium</title>
+    <title>StudyPath Forge | Pro Engine</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root { --primary: #6366f1; --bg: #fdfdfd; }
-        * { 
-            margin: 0; padding: 0; box-sizing: border-box; 
-            user-select: none; -webkit-user-select: none; /* Remove o azul da seleção */
-        }
-        body { width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); font-family: 'Inter', sans-serif; }
-        
-        /* Padrão de Pontos */
-        #canvas-container {
+        :root { --primary: #6366f1; --active-bg: #e0e7ff; --dock-bg: #ffffff; }
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { width: 100vw; height: 100vh; overflow: hidden; background: #fdfdfd; font-family: 'Inter', sans-serif; }
+
+        /* Fundo estilo Blueprint */
+        #canvas-bg {
             position: absolute; width: 100%; height: 100%;
             background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
-            background-size: 30px 30px;
+            background-size: 30px 30px; z-index: -1;
         }
 
-        canvas { position: absolute; top: 0; left: 0; touch-action: none; }
+        canvas { display: block; touch-action: none; }
 
-        .toolbar {
-            position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
-            background: white; padding: 8px; border-radius: 12px;
-            display: flex; gap: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            z-index: 100; border: 1px solid #ddd;
+        /* DOCK ESTILO EXCALIDRAW */
+        .dock-container {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: var(--dock-bg); padding: 8px; border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); display: flex; gap: 4px;
+            z-index: 1000; border: 1px solid rgba(0,0,0,0.05);
         }
 
         .tool {
-            width: 45px; height: 45px; border-radius: 8px; border: none;
+            width: 48px; height: 48px; border-radius: 12px; border: none;
             background: none; cursor: pointer; display: flex; align-items: center; 
-            justify-content: center; font-size: 1.2rem; transition: 0.2s; color: #444;
+            justify-content: center; font-size: 1.3rem; transition: 0.2s; color: #1c1c1c;
         }
 
-        .tool.active { background: var(--primary); color: white; }
-        
-        #zoom-info {
-            position: fixed; bottom: 20px; right: 20px; 
-            background: white; padding: 5px 15px; border-radius: 20px;
-            font-size: 12px; font-weight: bold; border: 1px solid #ddd; z-index: 100;
-        }
+        .tool.active { background: var(--active-bg); color: var(--primary); }
+        .tool:hover:not(.active) { background: #f4f4f5; }
+
+        #info { position: fixed; top: 20px; left: 20px; font-size: 12px; color: #888; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <div id="canvas-container">
-        <canvas id="mainCanvas"></canvas>
-    </div>
+    <div id="canvas-bg"></div>
+    <div id="info">StudyPath Forge v3.0 | Mova com a Luva, Desenhe com o Lápis</div>
+    <canvas id="canvas"></canvas>
 
-    <div class="toolbar">
-        <button class="tool" data-mode="hand"><i class="fas fa-hand-paper"></i></button>
-        <button class="tool active" data-mode="draw"><i class="fas fa-pencil-alt"></i></button>
-        <button class="tool" data-mode="text"><i class="fas fa-font"></i></button>
-        <button class="tool" data-mode="rect"><i class="far fa-square"></i></button>
-        <button class="tool" onclick="resetView()"><i class="fas fa-compress-arrows-alt"></i></button>
+    <div class="dock-container">
+        <button class="tool" data-mode="hand" title="Mover (Mão)"><i class="far fa-hand-paper"></i></button>
+        <button class="tool active" data-mode="select" title="Seleção (Cursor)"><i class="fas fa-mouse-pointer"></i></button>
+        <button class="tool" data-mode="draw" title="Desenhar (Lápis)"><i class="fas fa-pencil-alt"></i></button>
+        <button class="tool" data-mode="erase" title="Apagar"><i class="fas fa-eraser"></i></button>
+        <button class="tool" data-mode="rect" title="Retângulo"><i class="far fa-square"></i></button>
+        <button class="tool" data-mode="arrow" title="Seta"><i class="fas fa-long-arrow-alt-right"></i></button>
+        <button class="tool" data-mode="text" title="Texto"><i class="fas fa-font"></i></button>
+        <button class="tool" data-mode="shapes" title="Formas"><i class="fas fa-shapes"></i></button>
     </div>
-
-    <div id="zoom-info">Zoom: 100%</div>
 
     <script>
-        const canvas = document.getElementById('mainCanvas');
+        const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const zoomDisplay = document.getElementById('zoom-info');
-
-        let camera = { x: 0, y: 0, zoom: 1 };
-        let mode = 'draw';
-        let isDrawing = false;
-        let lastMouse = { x: 0, y: 0 };
         
-        // Array de objetos para persistência (Desenhos e Textos)
-        let strokes = []; 
-        let currentStroke = [];
+        let mode = 'select';
+        let isPressed = false;
+        let camera = { x: 0, y: 0 };
+        let startPos = { x: 0, y: 0 };
+        
+        // Memória de objetos (O que faz o desenho não sumir)
+        let objects = []; 
+        let currentPath = null;
 
         function init() {
             canvas.width = window.innerWidth;
@@ -80,109 +75,102 @@
             render();
         }
 
-        // --- LÓGICA DE COORDENADAS (MUITO IMPORTANTE) ---
-        function screenToWorld(x, y) {
-            return {
-                x: (x - camera.x) / camera.zoom,
-                y: (y - camera.y) / camera.zoom
-            };
+        // Transforma clique na tela em coordenada no mapa "infinito"
+        function toWorld(x, y) {
+            return { x: x - camera.x, y: y - camera.y };
         }
 
-        // --- RENDERIZAÇÃO ---
         function render() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.save();
             ctx.translate(camera.x, camera.y);
-            ctx.scale(camera.zoom, camera.zoom);
 
-            // Desenhar Roadmap Base (Exemplo)
-            drawRoadmapBase();
-
-            // Desenhar traços salvos
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#6366f1';
-            ctx.lineWidth = 3 / camera.zoom;
-
-            strokes.forEach(stroke => {
-                if(stroke.length < 2) return;
-                ctx.beginPath();
-                ctx.moveTo(stroke[0].x, stroke[0].y);
-                stroke.forEach(p => ctx.lineTo(p.x, p.y));
-                ctx.stroke();
+            // 1. Desenha Roadmap (Simulado)
+            ctx.fillStyle = "#6366f1";
+            [ {x:200, y:200}, {x:500, y:350}, {x:300, y:600} ].forEach((p, i) => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, 25, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = "white"; ctx.fillText(i+1, p.x-4, p.y+4); ctx.fillStyle = "#6366f1";
             });
 
-            // Desenhar traço atual
-            if(isDrawing && mode === 'draw') {
+            // 2. Desenha Objetos Salvos (Lápis, Retângulos, etc)
+            ctx.strokeStyle = "#1c1c1c";
+            ctx.lineWidth = 2;
+            ctx.lineCap = "round";
+
+            objects.forEach(obj => {
+                if(obj.type === 'path') {
+                    ctx.beginPath();
+                    ctx.moveTo(obj.points[0].x, obj.points[0].y);
+                    obj.points.forEach(p => ctx.lineTo(p.x, p.y));
+                    ctx.stroke();
+                } else if(obj.type === 'rect') {
+                    ctx.strokeRect(obj.x, obj.y, obj.w, obj.h);
+                }
+            });
+
+            // 3. Desenha o que está sendo feito agora
+            if(currentPath && mode === 'draw') {
                 ctx.beginPath();
-                ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
-                currentStroke.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.moveTo(currentPath.points[0].x, currentPath.points[0].y);
+                currentPath.points.forEach(p => ctx.lineTo(p.x, p.y));
                 ctx.stroke();
             }
 
             ctx.restore();
-            zoomDisplay.innerText = `Zoom: ${Math.round(camera.zoom * 100)}%`;
             requestAnimationFrame(render);
         }
 
-        function drawRoadmapBase() {
-            ctx.fillStyle = "#6366f1";
-            ctx.font = "bold 20px Inter";
-            [[100, 100], [400, 250], [200, 500]].forEach((pos, i) => {
-                ctx.beginPath();
-                ctx.arc(pos[0], pos[1], 30, 0, Math.PI*2);
-                ctx.fill();
-                ctx.fillStyle = "white";
-                ctx.fillText(i+1, pos[0]-7, pos[1]+7);
-                ctx.fillStyle = "#6366f1";
-            });
-        }
+        // --- INTERAÇÕES ---
+        const handleStart = (e) => {
+            isPressed = true;
+            const pos = e.touches ? e.touches[0] : e;
+            startPos = { x: pos.clientX, y: pos.clientY };
+            
+            if(mode === 'draw') {
+                currentPath = { type: 'path', points: [toWorld(pos.clientX, pos.clientY)] };
+            }
+            if(mode === 'text') {
+                const txt = prompt("O que deseja escrever?");
+                if(txt) alert("Texto adicionado (Lógica de objeto texto em construção)");
+            }
+        };
 
-        // --- EVENTOS ---
-        canvas.addEventListener('mousedown', e => {
-            isDrawing = true;
-            lastMouse = { x: e.clientX, y: e.clientY };
-            if(mode === 'draw') currentStroke = [screenToWorld(e.clientX, e.clientY)];
-        });
-
-        window.addEventListener('mousemove', e => {
-            if(!isDrawing) return;
+        const handleMove = (e) => {
+            if(!isPressed) return;
+            const pos = e.touches ? e.touches[0] : e;
 
             if(mode === 'hand') {
-                camera.x += e.clientX - lastMouse.x;
-                camera.y += e.clientY - lastMouse.y;
+                camera.x += pos.clientX - startPos.x;
+                camera.y += pos.clientY - startPos.y;
+                startPos = { x: pos.clientX, y: pos.clientY };
             } else if(mode === 'draw') {
-                currentStroke.push(screenToWorld(e.clientX, e.clientY));
+                currentPath.points.push(toWorld(pos.clientX, pos.clientY));
             }
-            lastMouse = { x: e.clientX, y: e.clientY };
+        };
+
+        const handleEnd = () => {
+            if(mode === 'draw' && currentPath) objects.push(currentPath);
+            isPressed = false;
+            currentPath = null;
+        };
+
+        // Listeners
+        canvas.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+        
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); handleStart(e); }, {passive: false});
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); handleMove(e); }, {passive: false});
+        canvas.addEventListener('touchend', handleEnd);
+
+        // Troca de Ferramentas
+        document.querySelectorAll('.tool').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('.tool').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                mode = btn.dataset.mode;
+            };
         });
-
-        window.addEventListener('mouseup', () => {
-            if(isDrawing && mode === 'draw') strokes.push(currentStroke);
-            isDrawing = false;
-        });
-
-        // ZOOM com Wheel
-        canvas.addEventListener('wheel', e => {
-            e.preventDefault();
-            const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            const mouseWorld = screenToWorld(e.clientX, e.clientY);
-            camera.zoom *= delta;
-            camera.x = e.clientX - mouseWorld.x * camera.zoom;
-            camera.y = e.clientY - mouseWorld.y * camera.zoom;
-        }, { passive: false });
-
-        // TOOLBAR
-        document.querySelectorAll('.tool').forEach(t => {
-            t.onclick = () => {
-                if(!t.dataset.mode) return;
-                document.querySelectorAll('.tool').forEach(btn => btn.classList.remove('active'));
-                t.classList.add('active');
-                mode = t.dataset.mode;
-            }
-        });
-
-        function resetView() { camera = { x: 0, y: 0, zoom: 1 }; }
 
         window.addEventListener('resize', init);
         init();
