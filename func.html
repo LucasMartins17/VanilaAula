@@ -3,45 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>StudyPath Forge | Canvas Engine</title>
+    <title>StudyPath Forge Premium</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {
-            --bg-color: #fdfdfd;
-            --dot-color: #e5e7eb;
-            --primary: #6366f1;
-            --active: #a855f7;
+        :root { --primary: #6366f1; --bg: #fdfdfd; }
+        * { 
+            margin: 0; padding: 0; box-sizing: border-box; 
+            user-select: none; -webkit-user-select: none; /* Remove o azul da seleção */
         }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { width: 100vw; height: 100vh; overflow: hidden; background: var(--bg); font-family: 'Inter', sans-serif; }
         
-        body { 
-            width: 100vw; height: 100vh; overflow: hidden;
-            background-color: var(--bg-color);
-            background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+        /* Padrão de Pontos */
+        #canvas-container {
+            position: absolute; width: 100%; height: 100%;
+            background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
             background-size: 30px 30px;
         }
 
-        /* Camada do Roadmap */
-        #viewport {
-            position: absolute; width: 100%; height: 100%;
-            cursor: default; transition: transform 0.1s ease-out;
-        }
+        canvas { position: absolute; top: 0; left: 0; touch-action: none; }
 
-        #roadmap-svg { position: absolute; width: 2000px; height: 2000px; pointer-events: none; }
-
-        .step {
-            position: absolute; width: 60px; height: 60px;
-            background: white; border: 3px solid var(--primary);
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-weight: bold; z-index: 2; transform: translate(-50%, -50%);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-
-        /* Canvas de Desenho */
-        #draw-canvas { position: absolute; top: 0; left: 0; z-index: 5; touch-action: none; }
-
-        /* Toolbar Estilo Excalidraw */
         .toolbar {
             position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
             background: white; padding: 8px; border-radius: 12px;
@@ -50,155 +30,162 @@
         }
 
         .tool {
-            width: 40px; height: 40px; border-radius: 8px; border: none;
-            background: none; cursor: pointer; color: #555; font-size: 1.1rem;
-            display: flex; align-items: center; justify-content: center; transition: 0.2s;
+            width: 45px; height: 45px; border-radius: 8px; border: none;
+            background: none; cursor: pointer; display: flex; align-items: center; 
+            justify-content: center; font-size: 1.2rem; transition: 0.2s; color: #444;
         }
 
         .tool.active { background: var(--primary); color: white; }
-
-        /* Elementos de Texto Dinâmicos */
-        .text-box {
-            position: absolute; min-width: 50px; min-height: 20px;
-            border: 1px dashed var(--primary); padding: 5px;
-            background: transparent; outline: none; z-index: 6;
-            font-size: 16px; color: var(--text);
+        
+        #zoom-info {
+            position: fixed; bottom: 20px; right: 20px; 
+            background: white; padding: 5px 15px; border-radius: 20px;
+            font-size: 12px; font-weight: bold; border: 1px solid #ddd; z-index: 100;
         }
-
     </style>
 </head>
 <body>
 
-    <div id="viewport">
-        <svg id="roadmap-svg">
-            <path id="snake-path" d="" fill="none" stroke="#6366f1" stroke-width="4" stroke-dasharray="8,8" opacity="0.3"/>
-        </svg>
-        <div class="step" style="left: 200px; top: 200px;">1</div>
-        <div class="step" style="left: 500px; top: 350px;">2</div>
-        <div class="step" style="left: 300px; top: 600px;">3</div>
+    <div id="canvas-container">
+        <canvas id="mainCanvas"></canvas>
     </div>
-
-    <canvas id="draw-canvas"></canvas>
 
     <div class="toolbar">
-        <button class="tool active" data-mode="select" title="Seleção"><i class="fas fa-mouse-pointer"></i></button>
-        <button class="tool" data-mode="hand" title="Mover"><i class="fas fa-hand-paper"></i></button>
-        <button class="tool" data-mode="draw" title="Lápis"><i class="fas fa-pencil-alt"></i></button>
-        <button class="tool" data-mode="text" title="Texto"><i class="fas fa-font"></i></button>
-        <button class="tool" data-mode="rect" title="Quadrado"><i class="far fa-square"></i></button>
-        <div style="width: 1px; background: #eee; margin: 0 5px;"></div>
-        <button class="tool" onclick="location.reload()" title="Limpar"><i class="fas fa-trash"></i></button>
+        <button class="tool" data-mode="hand"><i class="fas fa-hand-paper"></i></button>
+        <button class="tool active" data-mode="draw"><i class="fas fa-pencil-alt"></i></button>
+        <button class="tool" data-mode="text"><i class="fas fa-font"></i></button>
+        <button class="tool" data-mode="rect"><i class="far fa-square"></i></button>
+        <button class="tool" onclick="resetView()"><i class="fas fa-compress-arrows-alt"></i></button>
     </div>
 
-    <script>
-        const canvas = document.getElementById('draw-canvas');
-        const ctx = canvas.getContext('2d');
-        const viewport = document.getElementById('viewport');
-        const tools = document.querySelectorAll('.tool');
+    <div id="zoom-info">Zoom: 100%</div>
 
-        let mode = 'select'; // select, hand, draw, text, rect
+    <script>
+        const canvas = document.getElementById('mainCanvas');
+        const ctx = canvas.getContext('2d');
+        const zoomDisplay = document.getElementById('zoom-info');
+
+        let camera = { x: 0, y: 0, zoom: 1 };
+        let mode = 'draw';
         let isDrawing = false;
-        let startX, startY;
+        let lastMouse = { x: 0, y: 0 };
         
-        // Ajuste de Tamanho
-        function resize() {
+        // Array de objetos para persistência (Desenhos e Textos)
+        let strokes = []; 
+        let currentStroke = [];
+
+        function init() {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
+            render();
         }
-        window.addEventListener('resize', resize);
-        resize();
 
-        // Alternar Ferramentas
-        tools.forEach(tool => {
-            tool.addEventListener('click', () => {
-                if(!tool.dataset.mode) return;
-                tools.forEach(t => t.classList.remove('active'));
-                tool.classList.add('active');
-                mode = tool.dataset.mode;
-                
-                // Mudar cursor baseado no modo
-                if(mode === 'hand') canvas.style.cursor = 'grab';
-                else if(mode === 'draw') canvas.style.cursor = 'crosshair';
-                else canvas.style.cursor = 'default';
+        // --- LÓGICA DE COORDENADAS (MUITO IMPORTANTE) ---
+        function screenToWorld(x, y) {
+            return {
+                x: (x - camera.x) / camera.zoom,
+                y: (y - camera.y) / camera.zoom
+            };
+        }
+
+        // --- RENDERIZAÇÃO ---
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(camera.x, camera.y);
+            ctx.scale(camera.zoom, camera.zoom);
+
+            // Desenhar Roadmap Base (Exemplo)
+            drawRoadmapBase();
+
+            // Desenhar traços salvos
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#6366f1';
+            ctx.lineWidth = 3 / camera.zoom;
+
+            strokes.forEach(stroke => {
+                if(stroke.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(stroke[0].x, stroke[0].y);
+                stroke.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.stroke();
             });
+
+            // Desenhar traço atual
+            if(isDrawing && mode === 'draw') {
+                ctx.beginPath();
+                ctx.moveTo(currentStroke[0].x, currentStroke[0].y);
+                currentStroke.forEach(p => ctx.lineTo(p.x, p.y));
+                ctx.stroke();
+            }
+
+            ctx.restore();
+            zoomDisplay.innerText = `Zoom: ${Math.round(camera.zoom * 100)}%`;
+            requestAnimationFrame(render);
+        }
+
+        function drawRoadmapBase() {
+            ctx.fillStyle = "#6366f1";
+            ctx.font = "bold 20px Inter";
+            [[100, 100], [400, 250], [200, 500]].forEach((pos, i) => {
+                ctx.beginPath();
+                ctx.arc(pos[0], pos[1], 30, 0, Math.PI*2);
+                ctx.fill();
+                ctx.fillStyle = "white";
+                ctx.fillText(i+1, pos[0]-7, pos[1]+7);
+                ctx.fillStyle = "#6366f1";
+            });
+        }
+
+        // --- EVENTOS ---
+        canvas.addEventListener('mousedown', e => {
+            isDrawing = true;
+            lastMouse = { x: e.clientX, y: e.clientY };
+            if(mode === 'draw') currentStroke = [screenToWorld(e.clientX, e.clientY)];
         });
 
-        // Lógica de Eventos
-        canvas.addEventListener('mousedown', startAction);
-        canvas.addEventListener('mousemove', doAction);
-        canvas.addEventListener('mouseup', endAction);
+        window.addEventListener('mousemove', e => {
+            if(!isDrawing) return;
 
-        // Mobile
-        canvas.addEventListener('touchstart', (e) => startAction(e.touches[0]));
-        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); doAction(e.touches[0]); });
-        canvas.addEventListener('touchend', endAction);
-
-        function startAction(e) {
-            isDrawing = true;
-            startX = e.clientX;
-            startY = e.clientY;
-
-            if (mode === 'text') {
-                createTextBox(e.clientX, e.clientY);
-                isDrawing = false; 
+            if(mode === 'hand') {
+                camera.x += e.clientX - lastMouse.x;
+                camera.y += e.clientY - lastMouse.y;
+            } else if(mode === 'draw') {
+                currentStroke.push(screenToWorld(e.clientX, e.clientY));
             }
-            
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-        }
+            lastMouse = { x: e.clientX, y: e.clientY };
+        });
 
-        function doAction(e) {
-            if (!isDrawing) return;
-
-            if (mode === 'draw') {
-                ctx.lineWidth = 3;
-                ctx.lineCap = 'round';
-                ctx.strokeStyle = '#6366f1';
-                ctx.lineTo(e.clientX, e.clientY);
-                ctx.stroke();
-            } 
-            else if (mode === 'hand') {
-                // Simula o movimento da tela (viewport)
-                const dx = e.clientX - startX;
-                const dy = e.clientY - startY;
-                viewport.style.transform = `translate(${dx}px, ${dy}px)`;
-                // Aqui teria que mover o canvas também em um sistema real, 
-                // mas para o protótipo vamos manter o foco no desenho fixo.
-            }
-            else if (mode === 'rect') {
-                // Lógica de desenho de retângulo temporário (opcional)
-            }
-        }
-
-        function endAction() {
+        window.addEventListener('mouseup', () => {
+            if(isDrawing && mode === 'draw') strokes.push(currentStroke);
             isDrawing = false;
-        }
+        });
 
-        // Função para criar caixa de texto estilo Excalidraw
-        function createTextBox(x, y) {
-            const input = document.createElement('div');
-            input.className = 'text-box';
-            input.contentEditable = true;
-            input.style.left = x + 'px';
-            input.style.top = y + 'px';
-            document.body.appendChild(input);
-            
-            setTimeout(() => input.focus(), 10);
+        // ZOOM com Wheel
+        canvas.addEventListener('wheel', e => {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const mouseWorld = screenToWorld(e.clientX, e.clientY);
+            camera.zoom *= delta;
+            camera.x = e.clientX - mouseWorld.x * camera.zoom;
+            camera.y = e.clientY - mouseWorld.y * camera.zoom;
+        }, { passive: false });
 
-            input.addEventListener('blur', () => {
-                if (input.innerText.trim() === "") input.remove();
-            });
-        }
+        // TOOLBAR
+        document.querySelectorAll('.tool').forEach(t => {
+            t.onclick = () => {
+                if(!t.dataset.mode) return;
+                document.querySelectorAll('.tool').forEach(btn => btn.classList.remove('active'));
+                t.classList.add('active');
+                mode = t.dataset.mode;
+            }
+        });
 
-        // Desenhar Linhas do Roadmap (Simples)
-        function drawRoadmap() {
-            const path = document.getElementById('snake-path');
-            const steps = document.querySelectorAll('.step');
-            let d = `M 200 200 Q 350 200, 500 350 T 300 600`;
-            path.setAttribute('d', d);
-        }
-        drawRoadmap();
+        function resetView() { camera = { x: 0, y: 0, zoom: 1 }; }
 
+        window.addEventListener('resize', init);
+        init();
     </script>
 </body>
 </html>
