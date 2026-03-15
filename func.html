@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>StudyPath Lab | Snake Roadmap & Draw</title>
+    
+    <style>
+        /* --- CSS: ESTILO BLUEPRINT & GAME DESIGN --- */
+        :root {
+            --bg-color: #fdfdfd;
+            --dot-color: #e5e7eb;
+            --primary: #6366f1;
+            --secondary: #a855f7;
+            --text: #1f2937;
+        }
+
+        * {
+            margin: 0; padding: 0; box-sizing: border-box;
+            font-family: 'Inter', -apple-system, sans-serif;
+        }
+
+        body, html { 
+            width: 100%; height: 100%; 
+            background-color: var(--bg-color);
+            /* Fundo de pontos estilo Excalidraw */
+            background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+            background-size: 30px 30px;
+            overflow: hidden; /* Trava o scroll para o desenho funcionar bem */
+        }
+
+        /* Container do Roadmap */
+        #roadmap-container {
+            position: absolute;
+            width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* Linhas do Roadmap (SVG) */
+        #roadmap-svg {
+            position: absolute;
+            width: 100%; height: 100%;
+            top: 0; left: 0;
+            pointer-events: none; /* Não atrapalha o clique/desenho */
+        }
+
+        /* Círculos do Roadmap */
+        .step {
+            position: absolute;
+            width: 50px; height: 50px;
+            background: white;
+            border: 3px solid var(--primary);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 900; color: var(--primary);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            z-index: 2;
+            transform: translate(-50%, -50%); /* Centraliza no ponto exato */
+        }
+
+        /* Camada de Desenho (Canvas) */
+        #draw-canvas {
+            position: absolute;
+            top: 0; left: 0;
+            z-index: 5;
+            touch-action: none; /* Vital para mobile: impede o scroll ao desenhar */
+            cursor: crosshair;
+        }
+
+        /* Interface de Controle */
+        .ui-layer {
+            position: fixed;
+            bottom: 30px; left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex; flex-direction: column; align-items: center;
+            gap: 15px;
+            width: 90%;
+        }
+
+        .controls {
+            display: flex; gap: 10px;
+            background: white; padding: 8px;
+            border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border: 1px solid #eee;
+        }
+
+        button {
+            padding: 12px 24px; border-radius: 25px; border: none;
+            background: var(--primary); color: white; 
+            font-weight: bold; cursor: pointer;
+            transition: 0.2s;
+        }
+
+        button:active { transform: scale(0.95); }
+        
+        .badge {
+            background: rgba(99, 102, 241, 0.1);
+            color: var(--primary);
+            padding: 4px 12px; border-radius: 20px;
+            font-size: 12px; font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="roadmap-container">
+        <svg id="roadmap-svg">
+            <path id="snake-path" d="" fill="none" stroke="#6366f1" stroke-width="4" stroke-dasharray="8,8" opacity="0.4"/>
+        </svg>
+
+        <div class="step" data-x="15" data-y="20">1</div>
+        <div class="step" data-x="40" data-y="35">2</div>
+        <div class="step" data-x="25" data-y="55">3</div>
+        <div class="step" data-x="60" data-y="70">4</div>
+        <div class="step" data-x="85" data-y="50">5</div>
+    </div>
+
+    <canvas id="draw-canvas"></canvas>
+
+    <div class="ui-layer">
+        <div class="badge">MODO ANOTAÇÃO ATIVO</div>
+        <div class="controls">
+            <button onclick="clearCanvas()" style="background: #ef4444;">Limpar Notas</button>
+            <button onclick="alert('Funcionalidade de Salvar em breve!')">Salvar Progresso</button>
+        </div>
+    </div>
+
+    <script>
+        /* --- JS: LÓGICA DE DESENHO E ROADMAP --- */
+        const canvas = document.getElementById('draw-canvas');
+        const ctx = canvas.getContext('2d');
+        const steps = document.querySelectorAll('.step');
+        const path = document.getElementById('snake-path');
+
+        // 1. Ajustar tamanho e posicionar elementos
+        function init() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Posiciona os passos baseado nos atributos data
+            steps.forEach(step => {
+                step.style.left = step.dataset.x + "%";
+                step.style.top = step.dataset.y + "%";
+            });
+
+            drawRoadmapLines();
+        }
+
+        // 2. Desenhar as linhas curvas (Snake) entre os passos
+        function drawRoadmapLines() {
+            let d = "";
+            steps.forEach((step, index) => {
+                const rect = step.getBoundingClientRect();
+                const x = rect.left + rect.width / 2;
+                const y = rect.top + rect.height / 2;
+
+                if (index === 0) {
+                    d += `M ${x} ${y}`;
+                } else {
+                    // Cria uma curva suave (Quadratic Bezier)
+                    const prevRect = steps[index - 1].getBoundingClientRect();
+                    const prevX = prevRect.left + prevRect.width / 2;
+                    const prevY = prevRect.top + prevRect.height / 2;
+                    const cpX = (prevX + x) / 2; // Ponto de controlo
+                    d += ` Q ${cpX} ${prevY}, ${x} ${y}`;
+                }
+            });
+            path.setAttribute("d", d);
+        }
+
+        // 3. Lógica de Desenho (Mouse e Touch)
+        let drawing = false;
+
+        function startPosition(e) {
+            drawing = true;
+            draw(e);
+        }
+
+        function finishedPosition() {
+            drawing = false;
+            ctx.beginPath();
+        }
+
+        function draw(e) {
+            if (!drawing) return;
+
+            // Suporte para touch e rato
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            ctx.lineWidth = 3;
+            ctx.lineCap = "round";
+            ctx.strokeStyle = "#a855f7"; // Cor roxa para as anotações
+
+            ctx.lineTo(clientX, clientY);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(clientX, clientY);
+        }
+
+        // Event Listeners
+        canvas.addEventListener('mousedown', startPosition);
+        canvas.addEventListener('mouseup', finishedPosition);
+        canvas.addEventListener('mousemove', draw);
+
+        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); }, {passive: false});
+        canvas.addEventListener('touchend', finishedPosition);
+        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, {passive: false});
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        window.addEventListener('resize', init);
+        init();
+
+    </script>
+</body>
+</html>
